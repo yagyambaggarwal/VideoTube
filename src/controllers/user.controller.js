@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import jwt from "jsonwebtoken";
 
 
 const generateAccessAndRefreshToken = async(userId) => {
@@ -27,7 +28,7 @@ const generateAccessAndRefreshToken = async(userId) => {
 
 
 
-
+// Register
 
 const registerUser = asyncHandler(async (req, res)=>{
     // get user details from frontend
@@ -109,7 +110,7 @@ const registerUser = asyncHandler(async (req, res)=>{
 
 
 
-
+// Login
 
 const loginUser = asyncHandler(async (req, res) => {
     // req body -> data
@@ -180,8 +181,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 
 
-
-
+// logout
 
 const logoutUser = asyncHandler(async(req, res) => {
     // Still works 
@@ -219,8 +219,67 @@ const logoutUser = asyncHandler(async(req, res) => {
     .json(new ApiResponse(200, "User Logged Out Successfully!"));
 })
 
+
+
+
+
+// refresh tokens
+
+const refreshTokens = asyncHandler(async (req, res) => {
+    const oldRefreshToken = req.cookies.refreshToken;
+
+    if(!oldRefreshToken)throw new ApiError(401, "Refresh token missing.")
+    
+    let decoded
+    try {
+        decoded = jwt.verify(oldRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+    } catch (error) {
+        throw new ApiError(401, "Invalid Refresh Token.")
+    }
+
+    const {accessToken : newAccessToken, refreshToken : newRefreshToken} = await generateAccessAndRefreshToken(decoded._id)
+
+    const options = {
+        httpOnly : true,
+        secure : process.env.NODE_ENV === "production" 
+    }
+
+    console.log("New tokens are set.")
+
+    return res.status(201)
+    .cookie("accessToken", newAccessToken, options)
+    .cookie("refreshToken", newRefreshToken, options)
+    .cookie("sample-cookie", "The cookies are very tasty", options)
+    .json(new ApiResponse(
+        201,
+        "New cookies are set",
+        {
+            newAccessToken, newRefreshToken
+        }
+    ))
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    refreshTokens
 }
