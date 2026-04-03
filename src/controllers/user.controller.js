@@ -403,6 +403,104 @@ const updateCoverImage = asyncHandler(async (req, res) => {
 
 
 
+
+
+// user profile (channel) information
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+
+    // Take username from params 
+    const {username} = req.params;
+    if(!username){
+        throw new ApiError(404, "Username is missing.")
+    }
+
+    // Making aggregation peipleines
+    const channel = await User.aggregate([
+        // Finding the user with the given username
+        {
+            $match: {
+                username : username
+            }
+        },
+        // To find all the subscribers:
+        // subscriptions.subscriber === user._id
+        // stores them in array subscribers[]
+        {
+            $lookup : {
+                from : "subscriptions",
+                localField : "_id",
+                foreignField : "channel",
+                as : "subscribers"
+            }
+        },
+        // To find all the channels this user has subscribed to
+        // subscriptions.subscriber === user._id
+        // stores them in array subscribedTo[]
+        {
+            $lookup : {
+                from : "subscriptions",
+                localField : "_id",
+                foreignField : "subscriber",
+                as : "subscribedTo"
+            }
+        },
+        {
+            $addFields : {
+                // Subscribers count
+                subscribersCount : {
+                    $size : "$subscribers"
+                },
+                // Channels subscribed count
+                channelsSubscribedToCount : {
+                    $size : "$subscribedTo"
+                },
+                // Check if current user is subscribed
+                isSubscribed : {
+                    $cond : {
+                        if : {$in: [req.user._id, "$subscribers.subscriber"]},
+                        then  : true,
+                        else : false
+                    }
+                }
+            }
+        },
+        // Select fields to return
+        {
+            $project : {
+                fullName : true,
+                username : true,
+                avatar : true,
+                coverImage : true,
+                email : true,
+                isSubscribed : true,
+                subscribersCount : true,
+                channelsSubscribedToCount : true
+            }
+        }
+    ])
+
+    if(!channel || channel.length === 0){
+        throw new ApiError(404, "Channel does not exist")
+    }
+    
+
+    return res
+    .status(200)
+    .json(new ApiResponse(
+        200,
+        "User channel fetched successfully",
+
+        // channel[0] => Because: Aggregation returns an array
+        // You only need the first (and only) user
+        channel[0]
+    ))
+
+
+})
+
+
+
+
 export {
     registerUser,
     loginUser,
@@ -413,4 +511,5 @@ export {
     updateAccountDetails,
     updateCoverImage,
     updateAvatar,
+    getUserChannelProfile
 }
